@@ -48,17 +48,26 @@
     </div>
   </aside>
 
-  <main class="main">
+  <main class="main" data-section="time">
 
     <header class="header">
       <div class="header-copy"><span class="section-eyebrow">Gestión del equipo</span><h1>Marcajes Zoe Fragance</h1><p id="todayLabel"></p></div>
+      <div id="attendanceHeaderCopy" class="attendance-header-copy">
+        <div><span class="section-eyebrow">Control de asistencia</span><h2>Marcajes</h2></div>
+        <p>Registra la entrada, sigue el tiempo en turno y marca la salida. El valor se calcula con el tiempo trabajado.</p>
+      </div>
       <div class="rate-box hidden-by-section" id="rateBox">
         <div class="rate-copy">
           <span class="rate-label">Valor por hora</span>
           <strong id="currentRateValue">Sin definir</strong>
         </div>
-        <input id="hourRate" type="number" min="1" inputmode="numeric" aria-label="Nuevo valor por hora" placeholder="Agrega el nuevo valor por hora">
-        <button class="accent-btn" onclick="saveRate()">Guardar</button>
+        <form class="rate-editor" onsubmit="event.preventDefault(); saveRate()">
+          <label for="hourRate">Nueva tarifa</label>
+          <div class="rate-input-group">
+            <input id="hourRate" type="text" inputmode="numeric" data-currency="cop" autocomplete="off" maxlength="24" aria-label="Nuevo valor por hora" placeholder="$0">
+            <button class="accent-btn" type="submit">Guardar</button>
+          </div>
+        </form>
       </div>
     </header>
 
@@ -127,14 +136,6 @@
     <!-- TIME -->
     <section id="time" class="section active">
       <div class="time-panel">
-        <div class="time-panel-header">
-          <div>
-            <span class="section-eyebrow">Control de asistencia</span>
-            <h2>Marcajes</h2>
-            <p class="section-copy">Registra la entrada, sigue el tiempo en turno y marca la salida. El valor se calcula con el tiempo trabajado.</p>
-          </div>
-        </div>
-
         <div id="activeShiftPanel" class="active-shift-panel" aria-live="off"></div>
         <div class="time-box">
           <div class="attendance-shell">

@@ -58,6 +58,42 @@ function formatCOP(value){
   return COP.format(Math.round(numericValue));
 }
 
+// Los importes se editan como texto con teclado numérico; a la API solo viajan números.
+function readCurrencyInput(input){
+  const digits = String(input?.value || "").replace(/\D/g, "");
+  const value = digits ? Number(digits) : 0;
+  return Number.isSafeInteger(value) ? value : NaN;
+}
+
+function formatCurrencyInput(input){
+  const raw = input.value;
+  const caret = input.selectionStart ?? raw.length;
+  const rawDigits = raw.replace(/\D/g, "");
+  const digits = rawDigits.replace(/^0+(?=\d)/, "");
+  if (!digits) { input.value = ""; return; }
+  const before = Math.max(0, raw.slice(0, caret).replace(/\D/g, "").length - (rawDigits.length - digits.length));
+  input.value = "$" + digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  let position = 1, seen = 0;
+  while (position < input.value.length && seen < before) {
+    if (/\d/.test(input.value[position])) seen++;
+    position++;
+  }
+  input.setSelectionRange(position, position);
+}
+
+document.addEventListener("input", event => {
+  if (event.target.matches('input[data-currency="cop"]')) formatCurrencyInput(event.target);
+});
+
+document.addEventListener("keydown", event => {
+  const input = event.target;
+  if (!input.matches('input[data-currency="cop"]') || input.selectionStart !== input.selectionEnd) return;
+  const position = input.selectionStart;
+  // Permite borrar cifras junto al separador sin quedarse atrapado en el punto.
+  if (event.key === "Backspace" && input.value[position - 1] === ".") input.setSelectionRange(position - 1, position - 1);
+  if (event.key === "Delete" && input.value[position] === ".") input.setSelectionRange(position + 1, position + 1);
+});
+
 function formatHoursValue(value){
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)){
@@ -388,6 +424,8 @@ function toggleRateBoxVisibility(sectionId){
 }
 
 function setActiveSectionUI(id){
+  document.querySelector(".main").dataset.section = id;
+  document.getElementById("attendanceHeaderCopy").hidden = id !== "time";
   document.querySelectorAll(".section")
     .forEach(section => section.classList.remove("active"));
 
@@ -913,7 +951,7 @@ async function openWorkerRateModal(id){
 
         <label class="apple-modal-field">
           <span>Valor por hora</span>
-          <input id="swalWorkerRate" class="apple-modal-input-field" type="number" inputmode="numeric" min="1" step="1" value="${currentRate ?? ""}" placeholder="Ej: 10000">
+          <input id="swalWorkerRate" class="apple-modal-input-field" type="text" inputmode="numeric" data-currency="cop" autocomplete="off" maxlength="24" value="${currentRate ? escapeHTML(formatCOP(currentRate)) : ""}" placeholder="$0">
         </label>
 
         <p class="worker-rate-hint">${rateHint}</p>
@@ -934,16 +972,22 @@ async function openWorkerRateModal(id){
     didOpen: () => {
       const rateInput = document.getElementById("swalWorkerRate");
       if (rateInput){
+        formatCurrencyInput(rateInput);
         rateInput.focus();
         rateInput.select();
       }
     },
     preConfirm: () => {
       const rateInput = document.getElementById("swalWorkerRate");
-      const numericRate = Number(rateInput?.value || 0);
+      const numericRate = readCurrencyInput(rateInput);
 
       if (!Number.isFinite(numericRate) || numericRate <= 0){
         Swal.showValidationMessage("Ingresa una tarifa mayor a cero.");
+        return false;
+      }
+
+      if (numericRate > 1000000000){
+        Swal.showValidationMessage("La tarifa máxima por hora es $1.000.000.000.");
         return false;
       }
 
@@ -1200,7 +1244,7 @@ async function refreshLive({ force = false } = {}){
 
 async function saveRate(){
   const rateInput = document.getElementById("hourRate");
-  const nextRate = Number(rateInput.value);
+  const nextRate = readCurrencyInput(rateInput);
 
   if (!Number.isFinite(nextRate) || nextRate <= 0){
     showPremiumModal({
@@ -1208,6 +1252,11 @@ async function saveRate(){
       title: "Valor invalido",
       text: "Ingresa una tarifa por hora valida antes de guardar."
     });
+    return;
+  }
+
+  if (nextRate > 1000000000){
+    await showPremiumModal({ icon: "warning", title: "Revisa la tarifa", text: "La tarifa máxima por hora es $1.000.000.000." });
     return;
   }
 
