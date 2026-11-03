@@ -1,5 +1,5 @@
 /* Solo se guarda la interfaz. Los datos de asistencia y pagos vienen del servidor. */
-const CACHE = 'zoe-shell-v4';
+const CACHE = 'zoe-shell-v5';
 const ASSETS = [
   './', './index.html', './style.css', './theme.js', './config.js', './app.js',
   './manifest.json', './vendor/sweetalert2.all.min.js',

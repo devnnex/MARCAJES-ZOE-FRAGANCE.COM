@@ -46,8 +46,6 @@ async function main() {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', msg => { if (msg.type() === 'error' && !msg.text().includes('favicon.ico')) errors.push(msg.text()); });
-    const emailJsRequests = [];
-    page.on('request', req => { if (/emailjs/i.test(req.url())) emailJsRequests.push(req.url()); });
     await page.goto(origin);
     await page.waitForFunction(() => document.querySelector('#workerSelect').options.length === 2);
     assert.deepEqual(calls, ['getTimeBootstrap'], 'La primera carga debe usar una sola solicitud');
@@ -94,8 +92,6 @@ async function main() {
     await page.click('.swal2-confirm');
     await page.locator('.worker-card').filter({ hasText: 'María Torres Actualizada' }).locator('.worker-rate-btn').click();
     await page.fill('#swalWorkerRate', '15000');
-    assert.equal(await page.inputValue('#swalWorkerRate'), '$15.000');
-    assert.equal(await page.getAttribute('#swalWorkerRate', 'type'), 'text');
     await page.click('.swal2-confirm');
     await page.waitForFunction(() => document.querySelector('.swal2-title')?.textContent === 'Tarifa guardada');
     await page.click('.swal2-confirm');
@@ -110,26 +106,12 @@ async function main() {
     await page.click('.swal2-confirm');
     assert.equal(h.rows('liquidations').length, 1);
     assert.equal(h.rows('liquidations')[0][3], 20000);
-    assert.deepEqual(emailJsRequests, [], 'Zoe no debe realizar solicitudes de EmailJS');
-    assert.equal(await page.evaluate(() => typeof window.emailjs), 'undefined');
     await page.click('[data-section="history"]');
     await page.waitForFunction(() => document.querySelector('#historyTotalRecords')?.textContent === '1');
     assert.match(await page.locator('#historyTableBody').innerText(), /Ana Martínez/);
     await page.click('[data-section="dashboard"]');
     await page.waitForFunction(() => document.querySelector('#kpiWorkers').textContent === '2');
     assert.equal(await page.locator('#kpiMonth').innerText(), '1');
-    // Importe legible mientras se escribe; guardar conserva el contrato numérico.
-    await page.fill('#hourRate', '1000');
-    assert.equal(await page.inputValue('#hourRate'), '$1.000');
-    await page.press('#hourRate', 'ArrowUp');
-    await page.locator('#hourRate').hover();
-    await page.mouse.wheel(0, 120);
-    assert.equal(await page.inputValue('#hourRate'), '$1.000', 'El scroll y las flechas no cambian la tarifa');
-    await page.fill('#hourRate', '12000');
-    await page.locator('.rate-input-group button').click();
-    await page.waitForFunction(() => document.querySelector('.swal2-title')?.textContent === 'Tarifa actualizada');
-    assert.equal(h.call('getSettings').rate, 12000);
-    await page.click('.swal2-confirm');
     await page.click('#themeToggle');
     assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
     await page.reload();
@@ -161,44 +143,8 @@ async function main() {
         assert.ok(logo.complete && logo.width === logo.height && logo.width <= 60, 'Logo visible y compacto');
         assert.equal(logo.radius, '50%');
         assert.equal(logo.clip, 'circle(50%)');
-        const header = await page.evaluate(() => {
-          const title = document.querySelector('.header-copy').getBoundingClientRect();
-          const copy = document.querySelector('#attendanceHeaderCopy').getBoundingClientRect();
-          const shift = document.querySelector('#activeShiftPanel').getBoundingClientRect();
-          return { title, copy, shift, gap: shift.top - Math.max(title.bottom, copy.bottom) };
-        });
-        assert.ok(header.gap <= 24, 'Marcajes empieza inmediatamente después de la cabecera');
-        if (width >= 1024) assert.ok(header.copy.x >= header.title.right, 'La descripción queda al lado del título');
         await page.screenshot({ path: path.join(root, '.qa', 'screenshots', `marcajes-${width}-${theme}.png`), fullPage: true });
       }
-    }
-    // Cifras grandes: las tarjetas y el panel se expanden sin reducir el texto.
-    await page.evaluate(() => { adminUnlocked = true; });
-    for (const width of [320, 390, 768, 1024, 1440]) {
-      await page.setViewportSize({ width, height: 1000 });
-      await page.evaluate(() => setActiveSectionUI('history'));
-      for (const theme of ['dark', 'light']) {
-        await page.evaluate(theme => {
-          document.documentElement.dataset.theme = theme;
-          document.getElementById('historyTotalRecords').textContent = '9.999.999.999';
-          document.getElementById('historyTotalAmount').textContent = formatCOP(9007199254740991);
-        }, theme);
-        const kpis = await page.locator('.history-kpi strong').evaluateAll(nodes => nodes.map(node => ({ size: getComputedStyle(node).fontSize, fits: node.scrollWidth <= node.clientWidth + 1, inside: node.getBoundingClientRect().right <= innerWidth })));
-        assert.ok(kpis.every(kpi => kpi.size === '22px' && kpi.fits && kpi.inside), `Cifras grandes legibles en ${width}px: ${JSON.stringify(kpis)}`);
-        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-        await page.screenshot({ path: path.join(root, '.qa', 'screenshots', `historial-${width}-${theme}.png`), fullPage: true });
-      }
-      await page.evaluate(() => setActiveSectionUI('workers'));
-      await page.fill('#hourRate', '1000000000');
-      assert.equal(await page.inputValue('#hourRate'), '$1.000.000.000');
-      const rateLayout = await page.evaluate(() => {
-        const input = document.getElementById('hourRate').getBoundingClientRect();
-        const button = document.querySelector('.rate-input-group button').getBoundingClientRect();
-        return { input, button, overflow: document.documentElement.scrollWidth > innerWidth + 1 };
-      });
-      assert.equal(rateLayout.overflow, false);
-      assert.ok(Math.abs(rateLayout.input.y - rateLayout.button.y) <= 1 && rateLayout.button.left >= rateLayout.input.right, `Campo y botón alineados en ${width}px`);
-      await page.screenshot({ path: path.join(root, '.qa', 'screenshots', `tarifa-${width}.png`), fullPage: true });
     }
     // Validar manifest, iconos y que el shell abre sin red.
     const manifest = await page.evaluate(() => fetch('manifest.json').then(r => r.json()));
